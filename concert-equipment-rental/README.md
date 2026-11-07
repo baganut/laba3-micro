@@ -259,52 +259,9 @@ concert-equipment-rental/
     ├── sequence-success.png
     ├── sequence-failure.mmd
     └── sequence-failure.png
-```
 
-## 10. Как загрузить проект на GitHub и сдать преподавателю
 
-### Вариант A — через сайт GitHub
 
-1. Перейди на https://github.com/ и войди в аккаунт.
-2. Нажми **New repository**.
-3. Название: `concert-equipment-rental`.
-4. Выбери **Public** (если преподаватель не требует Private) и нажми **Create repository**. Не добавляй README автоматически, так как он уже есть в проекте.
-5. Распакуй ZIP-архив на компьютере.
-6. В созданном репозитории нажми **Add file → Upload files**.
-7. Перетащи содержимое папки `concert-equipment-rental` (именно файлы и папки внутри, а не ZIP-архив).
-8. В поле commit message напиши `Add lab 3 microservices architecture`.
-9. Нажми **Commit changes**.
-10. Проверь, что на главной странице видны `README.md`, `api/` и `docs/`, а файлы YAML открываются.
 
-### Вариант B — через Git и терминал
 
-Установи Git, открой терминал в распакованной папке и выполни:
 
-```bash
-git init
-git add .
-git commit -m "Add lab 3 microservices architecture"
-git branch -M main
-git remote add origin https://github.com/ВАШ_ЛОГИН/concert-equipment-rental.git
-git push -u origin main
-```
-
-Заменить `ВАШ_ЛОГИН` на свой GitHub username. Если GitHub запросит авторизацию, войди через браузер или используй Personal Access Token вместо пароля.
-
-### Что отправить преподавателю
-
-Отправь ссылку вида:
-
-`https://github.com/ВАШ_ЛОГИН/concert-equipment-rental`
-
-Перед отправкой проверь:
-- [ ] README открывается и содержит шаги 1–5 лабораторной.
-- [ ] В проекте 6 бизнес-сервисов, у каждого отдельная БД.
-- [ ] Есть не менее 3 синхронных и 2 асинхронных взаимодействий.
-- [ ] Сага описывает успешный путь и компенсации при сбоях.
-- [ ] В `docs/` лежат исходники и PNG диаграмм.
-- [ ] Для каждого сервиса есть OpenAPI YAML.
-- [ ] YAML проходят Redocly lint и открываются в Swagger Editor.
-- [ ] Репозиторий доступен преподавателю (Public либо преподаватель добавлен как collaborator).
-
-**Важно:** лабораторная №3 — проектная. Не нужно добавлять Java-код только ради этой работы. В следующих лабораторных можно реализовать каждый сервис отдельно на Java + Spring Boot, сохранив эти контракты как основу.
