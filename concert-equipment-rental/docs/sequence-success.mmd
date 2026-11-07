@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    actor Client as Клиент
+    participant GW as API Gateway
+    participant B as booking-service
+    participant C as catalog-service
+    participant I as inventory-service
+    participant P as payment-service
+    participant MQ as RabbitMQ
+    participant L as logistics-service
+    participant N as notification-service
+    Client->>GW: POST /api/v1/bookings + Idempotency-Key
+    GW->>B: Создать заказ
+    B->>C: GET /internal/v1/equipment/{id}
+    C-->>B: Карточка и тариф
+    B->>I: POST /internal/v1/reservations
+    I-->>B: reservationId, HELD
+    B->>P: POST /internal/v1/payments
+    P-->>B: paymentUrl, PENDING
+    B-->>Client: 202 PENDING_PAYMENT + paymentUrl
+    Client->>P: Оплата у провайдера
+    P->>MQ: payment.completed (outbox)
+    MQ-->>B: payment.completed
+    B->>B: Проверка eventId, CONFIRMED
+    B->>MQ: booking.confirmed
+    MQ-->>L: booking.confirmed
+    L->>L: Создать доставку/монтаж
+    MQ-->>N: booking.confirmed
+    N->>N: Отправить подтверждение

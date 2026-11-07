@@ -1,0 +1,118 @@
+openapi: 3.1.0
+info:
+  title: notification-service
+  version: 1.0.0
+  description: Транзакционные email- и SMS-уведомления.
+servers:
+  - url: http://localhost:8080
+    description: Локальная среда через API Gateway; внутренние пути доступны только внутри сети
+tags:
+  - name: public
+    description: Публичные операции через API Gateway
+  - name: internal
+    description: Межсервисные операции, недоступные клиенту напрямую
+paths:
+
+  /internal/v1/notifications:
+    post:
+      tags: [internal]
+      summary: Запросить отправку уведомления вручную/повторно
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient, channel, templateCode, variables]
+              properties:
+                recipient: { type: string }
+                channel: { type: string, enum: [EMAIL, SMS] }
+                templateCode: { type: string }
+                variables: { type: object, additionalProperties: true }
+      responses:
+        '202': { description: Уведомление принято в очередь }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /internal/v1/notifications/{notificationId}:
+    get:
+      tags: [internal]
+      summary: Получить статус отправки
+      parameters:
+        - in: path
+          name: notificationId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Статус уведомления
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: Повторный запрос с тем же ключом возвращает первоначальный результат.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    EquipmentId:
+      in: path
+      name: equipmentId
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Не прошла аутентификация
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Конфликт состояния или повторная операция
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Бизнес-валидация не пройдена
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    Notification:
+      type: object
+      required: [notificationId, channel, status, createdAt]
+      properties:
+        notificationId: { type: string }
+        channel: { type: string, enum: [EMAIL, SMS] }
+        status: { type: string, enum: [QUEUED, SENT, FAILED] }
+        createdAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+
+
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string, format: uri, example: "https://api.example.com/problems/validation" }
+        title: { type: string, example: "Business rule violation" }
+        status: { type: integer, example: 409 }
+        detail: { type: string, example: "Запрошенное количество оборудования недоступно на выбранный период." }
+        instance: { type: string, example: "/api/v1/bookings" }
+        traceId: { type: string, example: "00-abc123-def456-01" }
+

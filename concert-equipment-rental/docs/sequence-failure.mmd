@@ -1,0 +1,23 @@
+sequenceDiagram
+    autonumber
+    actor Client as Клиент
+    participant GW as API Gateway
+    participant B as booking-service
+    participant I as inventory-service
+    participant P as payment-service
+    participant MQ as RabbitMQ
+    Client->>GW: POST /api/v1/bookings + Idempotency-Key
+    GW->>B: Создать заказ
+    B->>I: POST /internal/v1/reservations
+    I-->>B: reservationId, HELD
+    B->>P: Создать платёж
+    P-->>B: paymentUrl
+    Note over Client,P: Провайдер отклоняет платёж
+    P->>MQ: payment.failed (outbox)
+    MQ-->>B: payment.failed
+    B->>B: Проверка eventId, статус CANCELLED
+    B->>I: DELETE /internal/v1/reservations/{id}
+    I-->>B: 204 резерв освобождён
+    B->>MQ: booking.cancelled
+    Note over B,I: Компенсация: ReleaseReservation
+    Note over B,Client: Клиент видит CANCELLED; повторная доставка события безопасна

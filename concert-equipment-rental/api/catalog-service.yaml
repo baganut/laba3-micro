@@ -1,0 +1,140 @@
+openapi: 3.1.0
+info:
+  title: catalog-service
+  version: 1.0.0
+  description: Каталог типов концертного оборудования и тарифов.
+servers:
+  - url: http://localhost:8080
+    description: Локальная среда через API Gateway; внутренние пути доступны только внутри сети
+tags:
+  - name: public
+    description: Публичные операции через API Gateway
+  - name: internal
+    description: Межсервисные операции, недоступные клиенту напрямую
+paths:
+
+  /api/v1/equipment:
+    get:
+      tags: [public]
+      summary: Получить каталог оборудования
+      parameters:
+        - in: query
+          name: category
+          schema: { type: string, enum: [LIGHT, SOUND, SCREENS, EFFECTS, RIGGING] }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Страница каталога
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EquipmentPage' }
+              example: { page: 0, size: 20, totalElements: 1, items: [{ id: "eq-101", name: "Moving Head Beam 230W", category: LIGHT, dailyRate: 4500, currency: RUB, active: true }] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/v1/equipment/{equipmentId}:
+    get:
+      tags: [public]
+      summary: Получить карточку оборудования
+      parameters:
+        - $ref: '#/components/parameters/EquipmentId'
+      responses:
+        '200':
+          description: Карточка
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipment' }
+              example: { id: "eq-101", name: "Moving Head Beam 230W", category: LIGHT, description: "Поворотный световой прибор", dailyRate: 4500, currency: RUB, active: true }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /internal/v1/equipment/{equipmentId}:
+    get:
+      tags: [internal]
+      summary: Получить карточку и тариф для расчёта заказа
+      parameters:
+        - $ref: '#/components/parameters/EquipmentId'
+      responses:
+        '200':
+          description: Снимок данных для заказа
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Equipment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: Повторный запрос с тем же ключом возвращает первоначальный результат.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    EquipmentId:
+      in: path
+      name: equipmentId
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Не прошла аутентификация
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Конфликт состояния или повторная операция
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Бизнес-валидация не пройдена
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    Equipment:
+      type: object
+      required: [id, name, category, dailyRate, currency, active]
+      properties:
+        id: { type: string, example: "eq-101" }
+        name: { type: string, example: "Moving Head Beam 230W" }
+        category: { type: string, enum: [LIGHT, SOUND, SCREENS, EFFECTS, RIGGING] }
+        description: { type: string }
+        dailyRate: { type: number, format: double, minimum: 0 }
+        currency: { type: string, example: RUB }
+        active: { type: boolean }
+    EquipmentPage:
+      type: object
+      required: [page, size, totalElements, items]
+      properties:
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/Equipment' } }
+
+
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string, format: uri, example: "https://api.example.com/problems/validation" }
+        title: { type: string, example: "Business rule violation" }
+        status: { type: integer, example: 409 }
+        detail: { type: string, example: "Запрошенное количество оборудования недоступно на выбранный период." }
+        instance: { type: string, example: "/api/v1/bookings" }
+        traceId: { type: string, example: "00-abc123-def456-01" }
+

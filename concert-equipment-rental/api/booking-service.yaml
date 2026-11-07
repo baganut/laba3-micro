@@ -1,0 +1,157 @@
+openapi: 3.1.0
+info:
+  title: booking-service
+  version: 1.0.0
+  description: Заказы на аренду и оркестрация саги.
+servers:
+  - url: http://localhost:8080
+    description: Локальная среда через API Gateway; внутренние пути доступны только внутри сети
+tags:
+  - name: public
+    description: Публичные операции через API Gateway
+  - name: internal
+    description: Межсервисные операции, недоступные клиенту напрямую
+paths:
+
+  /api/v1/bookings:
+    post:
+      tags: [public]
+      summary: Создать заказ аренды
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookingRequest' }
+            example: { customerId: "usr-10", startAt: "2026-12-10T10:00:00Z", endAt: "2026-12-12T22:00:00Z", deliveryAddress: "Москва, ул. Примерная, 10", items: [{ equipmentId: "eq-101", quantity: 4 }] }
+      responses:
+        '202':
+          description: Заказ принят в обработку сагой
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+              example: { id: "bkg-1001", status: PENDING_RESERVATION, totalAmount: 18000, currency: RUB }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /api/v1/bookings/{bookingId}:
+    get:
+      tags: [public]
+      summary: Получить заказ
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Заказ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Booking' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /internal/v1/bookings/{bookingId}/payment-status:
+    patch:
+      tags: [internal]
+      summary: Применить статус платежа (резервный внутренний API для сверки)
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentStatus, eventId]
+              properties:
+                paymentStatus: { type: string, enum: [COMPLETED, FAILED, REFUNDED] }
+                eventId: { type: string, format: uuid }
+      responses:
+        '204': { description: Статус применён }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: Повторный запрос с тем же ключом возвращает первоначальный результат.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    EquipmentId:
+      in: path
+      name: equipmentId
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Не прошла аутентификация
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Конфликт состояния или повторная операция
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Бизнес-валидация не пройдена
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    CreateBookingRequest:
+      type: object
+      required: [customerId, startAt, endAt, items]
+      properties:
+        customerId: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        deliveryAddress: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [equipmentId, quantity]
+            properties:
+              equipmentId: { type: string }
+              quantity: { type: integer, minimum: 1 }
+    Booking:
+      type: object
+      required: [id, status, totalAmount, currency]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [PENDING_RESERVATION, PENDING_PAYMENT, CONFIRMED, REJECTED, CANCELLED, EXPIRED, REFUND_PENDING] }
+        totalAmount: { type: number, format: double }
+        currency: { type: string }
+        paymentUrl: { type: string, format: uri }
+
+
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string, format: uri, example: "https://api.example.com/problems/validation" }
+        title: { type: string, example: "Business rule violation" }
+        status: { type: integer, example: 409 }
+        detail: { type: string, example: "Запрошенное количество оборудования недоступно на выбранный период." }
+        instance: { type: string, example: "/api/v1/bookings" }
+        traceId: { type: string, example: "00-abc123-def456-01" }
+

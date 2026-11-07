@@ -1,0 +1,146 @@
+openapi: 3.1.0
+info:
+  title: logistics-service
+  version: 1.0.0
+  description: Доставка, монтаж, демонтаж и возврат оборудования.
+servers:
+  - url: http://localhost:8080
+    description: Локальная среда через API Gateway; внутренние пути доступны только внутри сети
+tags:
+  - name: public
+    description: Публичные операции через API Gateway
+  - name: internal
+    description: Межсервисные операции, недоступные клиенту напрямую
+paths:
+
+  /api/v1/logistics/tasks/{taskId}:
+    get:
+      tags: [public]
+      summary: Получить статус логистического задания
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Задание
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogisticsTask' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /internal/v1/logistics/tasks:
+    post:
+      tags: [internal]
+      summary: Создать логистическое задание после подтверждения заказа
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bookingId, address, deliveryAt, pickupAt]
+              properties:
+                bookingId: { type: string }
+                address: { type: string }
+                deliveryAt: { type: string, format: date-time }
+                pickupAt: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Задание создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogisticsTask' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /internal/v1/stock-units/{stockUnitId}/inspection:
+    post:
+      tags: [internal]
+      summary: Передать результат осмотра единицы после возврата
+      parameters:
+        - in: path
+          name: stockUnitId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [condition, inspectedAt]
+              properties:
+                condition: { type: string, enum: [OK, DAMAGED, NEEDS_MAINTENANCE] }
+                notes: { type: string }
+                inspectedAt: { type: string, format: date-time }
+      responses:
+        '204': { description: Результат передан в inventory-service }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+components:
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: Повторный запрос с тем же ключом возвращает первоначальный результат.
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    EquipmentId:
+      in: path
+      name: equipmentId
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Не прошла аутентификация
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Конфликт состояния или повторная операция
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unprocessable:
+      description: Бизнес-валидация не пройдена
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+
+    LogisticsTask:
+      type: object
+      required: [taskId, bookingId, status, address, deliveryAt, pickupAt]
+      properties:
+        taskId: { type: string }
+        bookingId: { type: string }
+        status: { type: string, enum: [PLANNED, DISPATCHED, DELIVERED, INSTALLED, DISMANTLED, RETURNED, ISSUE_REPORTED] }
+        address: { type: string }
+        deliveryAt: { type: string, format: date-time }
+        pickupAt: { type: string, format: date-time }
+
+
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string, format: uri, example: "https://api.example.com/problems/validation" }
+        title: { type: string, example: "Business rule violation" }
+        status: { type: integer, example: 409 }
+        detail: { type: string, example: "Запрошенное количество оборудования недоступно на выбранный период." }
+        instance: { type: string, example: "/api/v1/bookings" }
+        traceId: { type: string, example: "00-abc123-def456-01" }
+
